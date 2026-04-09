@@ -3,96 +3,154 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-const BLOCKS = [
+type FormData = Record<string, string>;
+
+const SECTIONS = [
   {
-    title: "Identidad del negocio",
-    subtitle: "Cuéntanos sobre tu empresa",
-    questions: [
-      { key: "business_name", label: "Nombre del negocio y sector", placeholder: "Ej: Ferretería García — Retail ferretero" },
-      { key: "years_operating", label: "¿Cuántos años llevas operando?", placeholder: "Ej: 5 años" },
-      { key: "team_size", label: "¿Cuántas personas trabajan contigo?", placeholder: "Ej: 8 empleados" },
-      { key: "main_product", label: "¿Cuál es tu producto o servicio principal?", placeholder: "Ej: Venta al por mayor de materiales de construcción" },
-      { key: "business_description", label: "¿Cómo describes tu negocio en una frase?", placeholder: "Ej: Somos el proveedor de confianza de ferretería industrial en la región" },
+    id: 1,
+    title: "Tu negocio",
+    subtitle: "Cuéntanos quién eres y qué haces",
+    required: ["business_name", "sector"],
+    fields: [
+      { key: "business_name", label: "Nombre del negocio", type: "text", placeholder: "Ej: Ferretería García" },
+      { key: "sector", label: "Sector / industria", type: "text", placeholder: "Ej: Retail, Salud, Logística..." },
+      { key: "years_operating", label: "¿Cuántos años llevas operando?", type: "text", placeholder: "Ej: 5 años" },
+      {
+        key: "revenue_model",
+        label: "Modelo de ingresos",
+        type: "select",
+        options: ["Venta directa", "Suscripción mensual", "Comisión por transacción", "Freemium", "Marketplaces", "Otro"],
+      },
+      { key: "avg_ticket", label: "Ticket promedio por cliente (en USD o COP)", type: "text", placeholder: "Ej: $150.000 COP" },
+      { key: "active_clients", label: "¿Cuántos clientes activos tienes hoy?", type: "text", placeholder: "Ej: 80 clientes" },
+      { key: "business_description", label: "Describe tu negocio en 2-3 frases", type: "textarea", placeholder: "Qué haces, a quién le vendes, cómo generas dinero..." },
     ],
   },
   {
-    title: "El dolor",
-    subtitle: "Dinos qué te está frenando",
-    questions: [
-      { key: "main_problem", label: "¿Cuál es el problema más grande que tiene tu negocio HOY?", placeholder: "Sé específico. ¿Qué te quita el sueño?" },
-      { key: "problem_duration", label: "¿Cuánto tiempo llevas con ese problema?", placeholder: "Ej: 2 años" },
-      { key: "tried_solutions", label: "¿Qué has intentado para resolverlo y no funcionó?", placeholder: "Ej: Contratar asistente, usar Excel, probar apps..." },
-      { key: "monthly_cost", label: "¿Cuánto dinero o clientes crees que ese problema te está costando al mes?", placeholder: "Ej: Pierdo 3 clientes al mes, unos $5,000" },
-      { key: "impact_if_solved", label: "Si resolvieras ese problema, ¿qué cambiaría en tu negocio?", placeholder: "Ej: Podría atender el doble de clientes sin contratar más personal" },
+    id: 2,
+    title: "El problema",
+    subtitle: "Dinos exactamente qué te está frenando",
+    required: ["main_problem"],
+    fields: [
+      { key: "main_problem", label: "¿Cuál es el problema principal que quieres resolver con esta app? Sé específico.", type: "textarea", placeholder: "Qué pasa hoy, cuándo ocurre, qué consecuencias tiene..." },
+      { key: "problem_duration", label: "¿Hace cuánto tiempo existe este problema?", type: "text", placeholder: "Ej: 2 años" },
+      { key: "tried_solutions", label: "¿Qué soluciones has intentado antes y por qué no funcionaron?", type: "textarea", placeholder: "Excel, contratar personas, otras apps..." },
+      { key: "monthly_cost", label: "¿Cuánto te cuesta este problema al mes? (tiempo + dinero)", type: "text", placeholder: "Ej: 20 horas + $500 USD en errores" },
+      { key: "impact_if_solved", label: "Si lo resuelves, ¿qué cambia concretamente en tu negocio?", type: "textarea", placeholder: "Ej: Podría atender 3x más clientes sin contratar nadie" },
     ],
   },
   {
-    title: "Operación actual",
-    subtitle: "Cómo funciona tu negocio hoy",
-    questions: [
-      { key: "client_management", label: "¿Cómo gestionas hoy tus clientes?", placeholder: "Excel, papel, WhatsApp, ninguna herramienta..." },
-      { key: "time_consuming_process", label: "¿Qué proceso de tu negocio consume más tiempo innecesariamente?", placeholder: "Ej: Generar cotizaciones manuales cada vez" },
-      { key: "has_team", label: "¿Tienes equipo que necesite acceder a información del negocio?", placeholder: "Ej: Sí, 3 vendedores necesitan ver inventario en tiempo real" },
-      { key: "daily_metrics", label: "¿Qué información necesitas ver todos los días para saber si el negocio va bien?", placeholder: "Ej: Ventas del día, clientes nuevos, inventario bajo" },
-      { key: "current_software", label: "¿Usas algún software ahora? ¿Cuál y qué problema tiene?", placeholder: "Ej: QuickBooks para facturación, pero no se conecta con mi tienda online" },
+    id: 3,
+    title: "Los usuarios",
+    subtitle: "¿Quién va a usar esta app y cómo?",
+    required: ["app_user_type"],
+    fields: [
+      {
+        key: "app_user_type",
+        label: "¿Quién va a usar esta app?",
+        type: "select",
+        options: ["Solo mi equipo interno", "Solo mis clientes externos", "Ambos — equipo y clientes"],
+      },
+      { key: "user_profile", label: "Describe el usuario principal: cargo, nivel técnico, dispositivo que usa", type: "textarea", placeholder: "Ej: Vendedor de campo, poca experiencia técnica, usa celular Android" },
+      {
+        key: "concurrent_users",
+        label: "¿Cuántos usuarios simultáneos estimas?",
+        type: "select",
+        options: ["1-10", "11-50", "51-200", "200+"],
+      },
+      { key: "process_to_automate", label: "¿Qué proceso hace HOY ese usuario manualmente que la app debe automatizar?", type: "textarea", placeholder: "Ej: Llena un Excel con pedidos y luego lo manda por WhatsApp al bodeguero" },
     ],
   },
   {
-    title: "Visión",
-    subtitle: "A dónde quieres llegar",
-    questions: [
-      { key: "six_month_goal", label: "¿Qué quieres lograr en los próximos 6 meses?", placeholder: "Ej: Duplicar ventas y reducir tiempo en administración 50%" },
-      { key: "competitors", label: "¿Quiénes son tus competidores principales?", placeholder: "Ej: Ferretería Central, Home Depot zona norte" },
-      { key: "differentiator", label: "¿Qué te diferencia de ellos?", placeholder: "Ej: Servicio personalizado y entrega el mismo día" },
-      { key: "willingness_to_pay", label: "¿Cuánto estarías dispuesto a pagar mensualmente por una herramienta que resuelva tu problema principal?", placeholder: "Ej: Entre $100 y $300 al mes" },
-      { key: "additional_info", label: "¿Hay algo más que quieras que sepa antes de diseñar tu solución?", placeholder: "Cualquier contexto adicional que consideres importante..." },
+    id: 4,
+    title: "La app",
+    subtitle: "Qué debe hacer y cómo debe funcionar",
+    required: ["required_features"],
+    fields: [
+      { key: "app_name_idea", label: "¿Tienes nombre o idea de nombre para la app?", type: "text", placeholder: "Opcional — si no, Claude lo propone" },
+      { key: "required_features", label: "¿Qué debe poder HACER la app? Lista mínimo 3 funciones concretas", type: "textarea", placeholder: "1. Registrar pedidos en tiempo real\n2. Ver inventario actualizado\n3. Generar reportes diarios..." },
+      { key: "needs_auth", label: "¿Necesita login / autenticación?", type: "radio", options: ["Sí", "No"] },
+      { key: "user_roles", label: "¿Qué roles necesita? (ej: admin, operador, cliente)", type: "text", placeholder: "Opcional si no hay roles" },
+      { key: "integrations", label: "¿Debe integrarse con algún sistema existente?", type: "textarea", placeholder: "WhatsApp, Shopify, MercadoPago, Siigo, Google Sheets, ninguno..." },
+      { key: "handles_payments", label: "¿Maneja pagos dentro de la app?", type: "radio", options: ["Sí", "No"] },
+      { key: "needs_dashboard", label: "¿Necesita dashboard con métricas?", type: "radio", options: ["Sí", "No"] },
+      { key: "needs_mobile", label: "¿Necesita versión móvil o solo web?", type: "radio", options: ["Solo web", "Móvil prioritario", "Ambos"] },
+    ],
+  },
+  {
+    id: 5,
+    title: "Objetivos",
+    subtitle: "Qué define el éxito de esta solución",
+    required: ["goal_90_days"],
+    fields: [
+      { key: "goal_90_days", label: "¿Qué define el éxito de esta app en 90 días? Sé concreto con números si puedes", type: "textarea", placeholder: "Ej: Reducir 70% el tiempo en cotizaciones y cerrar 20 clientes nuevos" },
+      {
+        key: "budget_range",
+        label: "¿Cuál es tu presupuesto estimado?",
+        type: "select",
+        options: ["Menos de $1.000 USD", "$1.000–$3.000 USD", "$3.000–$8.000 USD", "$8.000–$20.000 USD", "Más de $20.000 USD"],
+      },
+      { key: "has_tech_team", label: "¿Tienes equipo técnico propio?", type: "radio", options: ["Sí, tengo devs", "No, dependo 100% de esta solución"] },
+      { key: "competitors", label: "¿Hay competidores que ya tienen algo similar? ¿Cuáles?", type: "text", placeholder: "Ej: Siigo, Alegra, herramientas genéricas de CRM" },
+      { key: "additional_info", label: "¿Algo más que debamos saber antes de diseñar tu solución?", type: "textarea", placeholder: "Opcional" },
     ],
   },
 ];
 
-type FormData = Record<string, string>;
+const inputBase: React.CSSProperties = {
+  width: "100%",
+  background: "#111",
+  border: "1px solid #333",
+  borderRadius: 10,
+  padding: "12px 16px",
+  color: "#fff",
+  fontSize: 15,
+  outline: "none",
+  boxSizing: "border-box",
+  transition: "border-color 0.2s",
+  fontFamily: "Inter, sans-serif",
+};
 
 export default function IntakeForm() {
   const router = useRouter();
-  const [currentBlock, setCurrentBlock] = useState(0);
+  const [currentSection, setCurrentSection] = useState(0);
   const [formData, setFormData] = useState<FormData>({});
   const [generatingPreview, setGeneratingPreview] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [focused, setFocused] = useState<string | null>(null);
 
-  const totalBlocks = BLOCKS.length;
-  const block = BLOCKS[currentBlock];
-  const progress = (currentBlock / totalBlocks) * 100;
+  const section = SECTIONS[currentSection];
+  const progress = ((currentSection) / SECTIONS.length) * 100;
+  const isLastSection = currentSection === SECTIONS.length - 1;
 
   const handleChange = (key: string, value: string) => {
     setFormData((prev) => ({ ...prev, [key]: value }));
   };
 
-  const isBlockComplete = () => {
-    return block.questions.every((q) => (formData[q.key] || "").trim().length > 0);
-  };
+  const isSectionValid = () =>
+    section.required.every((key) => (formData[key] || "").trim().length > 0);
 
   const handleNext = () => {
-    if (currentBlock < totalBlocks - 1) {
-      setCurrentBlock((prev) => prev + 1);
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
+    if (!isSectionValid()) return;
+    setCurrentSection((prev) => prev + 1);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleBack = () => {
-    if (currentBlock > 0) {
-      setCurrentBlock((prev) => prev - 1);
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
+    setCurrentSection((prev) => prev - 1);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleSubmit = async () => {
+    if (!isSectionValid()) return;
     setLoading(true);
     setError(null);
 
-    const sector = formData.business_name?.includes("—")
-      ? formData.business_name.split("—")[1]?.trim()
-      : formData.business_name || "";
+    const sector = formData.sector ||
+      (formData.business_name?.includes("—")
+        ? formData.business_name.split("—")[1]?.trim()
+        : formData.business_name || "");
 
     try {
       const response = await fetch("/api/intake", {
@@ -102,10 +160,7 @@ export default function IntakeForm() {
       });
 
       const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Error al enviar el formulario");
-      }
+      if (!response.ok) throw new Error(data.error || "Error al enviar el formulario");
 
       const { clientId } = data;
       setLoading(false);
@@ -118,7 +173,7 @@ export default function IntakeForm() {
           body: JSON.stringify({ clientId }),
         });
       } catch {
-        // preview page handles generation on its own if this fails
+        // preview page handles generation on its own
       }
 
       router.push(`/preview/${clientId}`);
@@ -130,102 +185,166 @@ export default function IntakeForm() {
 
   if (generatingPreview) {
     return (
-      <div className="min-h-screen bg-[#0A0A0A] flex flex-col items-center justify-center gap-4">
-        <div className="w-12 h-12 border-[3px] border-[#F5C518] border-t-transparent rounded-full animate-spin" />
-        <p className="text-[#F5C518] text-base font-medium">Claude está analizando tu negocio...</p>
+      <div style={{ minHeight: "100vh", background: "#0A0A0A", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 20 }}>
+        <div style={{ width: 48, height: 48, border: "3px solid #F5C518", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
+        <p style={{ color: "#F5C518", fontSize: 16, fontFamily: "Inter, sans-serif", fontWeight: 500 }}>
+          Claude está analizando tu negocio...
+        </p>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     );
   }
 
-  return (
-    <div className="min-h-screen bg-[#0A0A0A] text-white">
-      {/* Header */}
-      <div className="sticky top-0 z-10 bg-[rgba(10,10,10,0.9)] backdrop-blur-md border-b border-[rgba(245,197,24,0.1)] px-6 py-4">
-        <div className="max-w-2xl mx-auto">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded bg-[#F5C518] flex items-center justify-center">
-                <span className="text-[#0A0A0A] font-black text-xs">360</span>
-              </div>
-              <span className="font-bold text-sm">Diagnóstico</span>
-            </div>
-            <span className="text-xs text-[rgba(255,255,255,0.4)]">
-              Bloque {currentBlock + 1} de {totalBlocks}
-            </span>
-          </div>
-          {/* Progress bar */}
-          <div className="w-full h-1 bg-[rgba(255,255,255,0.08)] rounded-full overflow-hidden">
-            <div
-              className="h-full bg-[#F5C518] rounded-full transition-all duration-500 ease-out"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-          {/* Block indicators */}
-          <div className="flex gap-2 mt-2">
-            {BLOCKS.map((b, i) => (
-              <div
-                key={b.title}
-                className="flex-1 text-center text-xs truncate"
+  const renderField = (field: typeof section.fields[0]) => {
+    const isFocused = focused === field.key;
+    const borderColor = isFocused ? "#F5C518" : "#333";
+
+    if (field.type === "textarea") {
+      return (
+        <textarea
+          key={field.key}
+          value={formData[field.key] || ""}
+          onChange={(e) => handleChange(field.key, e.target.value)}
+          onFocus={() => setFocused(field.key)}
+          onBlur={() => setFocused(null)}
+          placeholder={field.placeholder}
+          rows={4}
+          style={{ ...inputBase, borderColor, resize: "vertical" }}
+        />
+      );
+    }
+
+    if (field.type === "select") {
+      return (
+        <select
+          key={field.key}
+          value={formData[field.key] || ""}
+          onChange={(e) => handleChange(field.key, e.target.value)}
+          onFocus={() => setFocused(field.key)}
+          onBlur={() => setFocused(null)}
+          style={{ ...inputBase, borderColor, cursor: "pointer" }}
+        >
+          <option value="" disabled>Selecciona una opción</option>
+          {field.options?.map((opt) => (
+            <option key={opt} value={opt}>{opt}</option>
+          ))}
+        </select>
+      );
+    }
+
+    if (field.type === "radio") {
+      return (
+        <div key={field.key} style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+          {field.options?.map((opt) => {
+            const selected = formData[field.key] === opt;
+            return (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => handleChange(field.key, opt)}
                 style={{
-                  color: i === currentBlock
-                    ? "#F5C518"
-                    : i < currentBlock
-                    ? "rgba(245,197,24,0.5)"
-                    : "rgba(255,255,255,0.25)"
+                  background: selected ? "rgba(245,197,24,0.1)" : "#111",
+                  border: `1px solid ${selected ? "#F5C518" : "#333"}`,
+                  color: selected ? "#F5C518" : "#aaa",
+                  borderRadius: 8,
+                  padding: "10px 18px",
+                  fontSize: 14,
+                  fontWeight: selected ? 600 : 400,
+                  cursor: "pointer",
+                  transition: "all 0.15s",
+                  fontFamily: "Inter, sans-serif",
                 }}
               >
-                {b.title}
+                {opt}
+              </button>
+            );
+          })}
+        </div>
+      );
+    }
+
+    return (
+      <input
+        key={field.key}
+        type="text"
+        value={formData[field.key] || ""}
+        onChange={(e) => handleChange(field.key, e.target.value)}
+        onFocus={() => setFocused(field.key)}
+        onBlur={() => setFocused(null)}
+        placeholder={field.placeholder}
+        style={{ ...inputBase, borderColor }}
+      />
+    );
+  };
+
+  return (
+    <div style={{ minHeight: "100vh", background: "#0A0A0A", fontFamily: "Inter, sans-serif", color: "#fff" }}>
+
+      {/* Progress bar */}
+      <div style={{ position: "sticky", top: 0, zIndex: 10, background: "rgba(10,10,10,0.95)", backdropFilter: "blur(8px)", borderBottom: "1px solid #1a1a1a", padding: "16px 24px" }}>
+        <div style={{ maxWidth: 680, margin: "0 auto" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ width: 24, height: 24, background: "#F5C518", borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <span style={{ color: "#0A0A0A", fontWeight: 900, fontSize: 11 }}>360</span>
+              </div>
+              <span style={{ fontWeight: 700, fontSize: 14 }}>App Factory</span>
+            </div>
+            <span style={{ color: "#555", fontSize: 13 }}>
+              {currentSection + 1} / {SECTIONS.length}
+            </span>
+          </div>
+          <div style={{ width: "100%", height: 3, background: "#1a1a1a", borderRadius: 99, overflow: "hidden" }}>
+            <div style={{ height: "100%", width: `${progress}%`, background: "#F5C518", borderRadius: 99, transition: "width 0.4s ease" }} />
+          </div>
+          <div style={{ display: "flex", gap: 4, marginTop: 8 }}>
+            {SECTIONS.map((s, i) => (
+              <div key={s.id} style={{ flex: 1, textAlign: "center", fontSize: 11, color: i === currentSection ? "#F5C518" : i < currentSection ? "rgba(245,197,24,0.4)" : "#333", fontWeight: i === currentSection ? 600 : 400, transition: "color 0.2s", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {s.title}
               </div>
             ))}
           </div>
         </div>
       </div>
 
-      {/* Form content */}
-      <div className="max-w-2xl mx-auto px-6 py-10">
-        {/* Block header */}
-        <div className="mb-8">
-          <div className="text-[#F5C518] text-xs font-bold uppercase tracking-wider mb-1">
-            Bloque {currentBlock + 1}
-          </div>
-          <h2 className="text-3xl font-black mb-2">{block.title}</h2>
-          <p className="text-[rgba(255,255,255,0.5)]">{block.subtitle}</p>
+      {/* Section content */}
+      <div style={{ maxWidth: 680, margin: "0 auto", padding: "48px 24px 120px" }}>
+        <div style={{ marginBottom: 36 }}>
+          <p style={{ color: "#F5C518", fontSize: 12, fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: 8 }}>
+            Sección {currentSection + 1}
+          </p>
+          <h2 style={{ fontSize: 32, fontWeight: 800, margin: "0 0 8px" }}>{section.title}</h2>
+          <p style={{ color: "#666", fontSize: 16 }}>{section.subtitle}</p>
         </div>
 
-        {/* Questions */}
-        <div className="space-y-6">
-          {block.questions.map((question, qIndex) => (
-            <div key={question.key} className="animate-fade-in">
-              <label className="block text-sm font-semibold mb-2 text-[rgba(255,255,255,0.85)]">
-                <span className="text-[#F5C518] text-xs mr-2">
-                  {String(currentBlock * 5 + qIndex + 1).padStart(2, "0")}
-                </span>
-                {question.label}
+        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+          {section.fields.map((field) => (
+            <div key={field.key}>
+              <label style={{ display: "block", fontSize: 14, fontWeight: 600, color: "#ccc", marginBottom: 8 }}>
+                {section.required.includes(field.key) && (
+                  <span style={{ color: "#F5C518", marginRight: 4 }}>*</span>
+                )}
+                {field.label}
               </label>
-              <textarea
-                value={formData[question.key] || ""}
-                onChange={(e) => handleChange(question.key, e.target.value)}
-                placeholder={question.placeholder}
-                rows={3}
-                className="w-full bg-[rgba(255,255,255,0.05)] border border-[rgba(255,255,255,0.1)] rounded-xl p-4 text-white placeholder-[rgba(255,255,255,0.3)] text-sm resize-none focus:outline-none focus:border-[rgba(245,197,24,0.5)] focus:bg-[rgba(255,255,255,0.07)] transition-all duration-200"
-              />
+              {renderField(field)}
             </div>
           ))}
         </div>
 
-        {/* Error */}
         {error && (
-          <div className="mt-6 p-4 rounded-xl bg-[rgba(239,68,68,0.1)] border border-[rgba(239,68,68,0.3)] text-red-400 text-sm">
+          <div style={{ marginTop: 24, padding: "12px 16px", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 10, color: "#f87171", fontSize: 14 }}>
             {error}
           </div>
         )}
+      </div>
 
-        {/* Navigation */}
-        <div className="mt-8 flex items-center justify-between">
-          {currentBlock > 0 ? (
+      {/* Navigation */}
+      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "rgba(10,10,10,0.97)", borderTop: "1px solid #1a1a1a", padding: "16px 24px" }}>
+        <div style={{ maxWidth: 680, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          {currentSection > 0 ? (
             <button
               onClick={handleBack}
-              className="px-6 py-3 text-sm font-semibold text-[rgba(255,255,255,0.6)] hover:text-white transition-colors border border-[rgba(255,255,255,0.1)] rounded-xl hover:border-[rgba(255,255,255,0.2)]"
+              style={{ background: "none", border: "1px solid #333", color: "#888", borderRadius: 10, padding: "12px 24px", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "Inter, sans-serif" }}
             >
               ← Anterior
             </button>
@@ -233,36 +352,59 @@ export default function IntakeForm() {
             <div />
           )}
 
-          {currentBlock < totalBlocks - 1 ? (
-            <button
-              onClick={handleNext}
-              disabled={!isBlockComplete()}
-              className="bg-[#F5C518] text-[#0A0A0A] font-bold px-8 py-3 text-sm rounded-xl hover:bg-[#e6b515] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              Siguiente →
-            </button>
-          ) : (
+          {isLastSection ? (
             <button
               onClick={handleSubmit}
-              disabled={!isBlockComplete() || loading}
-              className="bg-[#F5C518] text-[#0A0A0A] font-bold px-8 py-3 text-sm rounded-xl hover:bg-[#e6b515] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+              disabled={!isSectionValid() || loading}
+              style={{
+                background: isSectionValid() && !loading ? "#F5C518" : "#333",
+                color: isSectionValid() && !loading ? "#0A0A0A" : "#666",
+                border: "none",
+                borderRadius: 10,
+                padding: "12px 32px",
+                fontSize: 15,
+                fontWeight: 800,
+                cursor: isSectionValid() && !loading ? "pointer" : "not-allowed",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                transition: "all 0.2s",
+                fontFamily: "Inter, sans-serif",
+              }}
             >
               {loading ? (
                 <>
-                  <span className="w-4 h-4 border-2 border-[#0A0A0A] border-t-transparent rounded-full animate-spin" />
+                  <span style={{ width: 16, height: 16, border: "2px solid #0A0A0A", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 1s linear infinite", display: "inline-block" }} />
                   Enviando...
                 </>
               ) : (
-                "Enviar diagnóstico →"
+                "Generar propuesta →"
               )}
+            </button>
+          ) : (
+            <button
+              onClick={handleNext}
+              disabled={!isSectionValid()}
+              style={{
+                background: isSectionValid() ? "#F5C518" : "#333",
+                color: isSectionValid() ? "#0A0A0A" : "#666",
+                border: "none",
+                borderRadius: 10,
+                padding: "12px 32px",
+                fontSize: 15,
+                fontWeight: 800,
+                cursor: isSectionValid() ? "pointer" : "not-allowed",
+                transition: "all 0.2s",
+                fontFamily: "Inter, sans-serif",
+              }}
+            >
+              Siguiente →
             </button>
           )}
         </div>
-
-        <p className="mt-6 text-center text-xs text-[rgba(255,255,255,0.25)]">
-          Tus respuestas son confidenciales y solo serán usadas para diseñar tu solución.
-        </p>
       </div>
+
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }
