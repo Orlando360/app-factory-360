@@ -53,12 +53,12 @@ type ClientDetailClientProps = {
 
 export default function ClientDetailClient({ client }: ClientDetailClientProps) {
   const [generating, setGenerating] = useState(false);
-  const [jobId, setJobId] = useState<string | null>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem(`pipeline_job_${client.id}`);
-    }
-    return null;
-  });
+  const [jobId, setJobId] = useState<string | null>(
+    client.current_pipeline_job_id ??
+      (typeof window !== "undefined"
+        ? localStorage.getItem(`pipeline_job_${client.id}`)
+        : null)
+  );
   const [activeTab, setActiveTab] = useState<"progress" | "answers">("progress");
 
   const agentOutputs = (client.agent_outputs as Record<string, unknown>) || {};

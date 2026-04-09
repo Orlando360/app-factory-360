@@ -21,6 +21,15 @@ async function updateJob(jobId: string, update: Record<string, unknown>) {
   }
 }
 
+async function syncClient(clientId: string, patch: Record<string, unknown>) {
+  if (!clientId) return;
+  const supabase = getSupabase();
+  const { error } = await supabase.from("clients").update(patch).eq("id", clientId);
+  if (error) {
+    console.error(`[Pipeline] Failed to sync client ${clientId}:`, error.message);
+  }
+}
+
 async function appendAgentOutput(jobId: string, agentId: string, output: string) {
   const supabase = getSupabase();
   const { error } = await supabase.rpc("append_agent_output", {
@@ -58,11 +67,13 @@ export const pipelineFunction = inngest.createFunction(
   },
   async ({ event, step }) => {
     const { jobId, client_brief } = event.data;
+    const clientId = (client_brief as Record<string, unknown>)?.id as string | undefined;
     const briefText = JSON.stringify(client_brief, null, 2);
 
     // ── Step 01: Diagnosticador ──────────────────────────────────────────────
     const diagnostico = await step.run("01-diagnosticador", async () => {
       await updateJob(jobId, { current_step: "01-diagnosticador", status: "running" });
+      if (clientId) await syncClient(clientId, { status: "generating", current_pipeline_job_id: jobId });
       const output = await callAgent(
         "01-diagnosticador",
         `Analiza este brief de cliente y produce el diagnóstico estratégico:\n\n${briefText}`
@@ -168,6 +179,7 @@ export const pipelineFunction = inngest.createFunction(
         final_report: finalReport,
         completed_at: new Date().toISOString(),
       });
+      if (clientId) await syncClient(clientId, { status: "live" });
     });
 
     return { jobId, status: "completed" };
