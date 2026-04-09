@@ -139,7 +139,7 @@ Responde ÚNICAMENTE con un objeto JSON válido, sin markdown, sin bloques de c�
     return Response.json({ success: true, preview }, { status: 200 });
 
   } catch (error) {
-    console.error("Preview error details:", JSON.stringify(error, Object.getOwnPropertyNames(error)));
+    console.error("Preview error details:", JSON.stringify(error, Object.getOwnPropertyNames(error as object)));
     return Response.json({ error: "Failed to generate preview", details: String(error) }, { status: 500 });
   }
 }
