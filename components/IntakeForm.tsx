@@ -56,13 +56,13 @@ export default function IntakeForm() {
   const router = useRouter();
   const [currentBlock, setCurrentBlock] = useState(0);
   const [formData, setFormData] = useState<FormData>({});
-  const [submitted, setSubmitted] = useState(false);
+  const [generatingPreview, setGeneratingPreview] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const totalBlocks = BLOCKS.length;
   const block = BLOCKS[currentBlock];
-  const progress = ((currentBlock + (submitted ? 1 : 0)) / totalBlocks) * 100;
+  const progress = (currentBlock / totalBlocks) * 100;
 
   const handleChange = (key: string, value: string) => {
     setFormData((prev) => ({ ...prev, [key]: value }));
@@ -90,7 +90,6 @@ export default function IntakeForm() {
     setLoading(true);
     setError(null);
 
-    // Derive sector from business_name if not separate
     const sector = formData.business_name?.includes("—")
       ? formData.business_name.split("—")[1]?.trim()
       : formData.business_name || "";
@@ -108,41 +107,32 @@ export default function IntakeForm() {
         throw new Error(data.error || "Error al enviar el formulario");
       }
 
-      setSubmitted(true);
+      const { clientId } = data;
+      setLoading(false);
+      setGeneratingPreview(true);
+
+      try {
+        await fetch("/api/preview", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ clientId }),
+        });
+      } catch {
+        // preview page handles generation on its own if this fails
+      }
+
+      router.push(`/preview/${clientId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error inesperado. Intenta de nuevo.");
-    } finally {
       setLoading(false);
     }
   };
 
-  if (submitted) {
+  if (generatingPreview) {
     return (
-      <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center px-6">
-        <div className="max-w-lg w-full text-center">
-          <div className="w-20 h-20 rounded-full bg-[rgba(245,197,24,0.1)] border-2 border-[#F5C518] flex items-center justify-center mx-auto mb-6">
-            <span className="text-4xl">✓</span>
-          </div>
-          <h2 className="text-3xl font-black mb-4">¡Diagnóstico recibido!</h2>
-          <p className="text-[rgba(255,255,255,0.6)] text-lg leading-relaxed mb-8">
-            Tu diagnóstico está en manos de Orlando. En 24 horas recibirás tu solución personalizada.
-          </p>
-          <div className="p-6 rounded-xl border border-[rgba(245,197,24,0.2)] bg-[rgba(245,197,24,0.05)] text-left mb-8">
-            <p className="text-[#F5C518] font-bold text-sm mb-2">¿Qué pasa ahora?</p>
-            <ul className="space-y-2 text-sm text-[rgba(255,255,255,0.6)]">
-              <li>• 8 agentes de IA analizarán tu negocio</li>
-              <li>• Diseñarán y construirán tu app personalizada</li>
-              <li>• Recibirás un link a tu app en producción</li>
-              <li>• Todo en menos de 24 horas</li>
-            </ul>
-          </div>
-          <button
-            onClick={() => router.push("/")}
-            className="text-sm text-[rgba(255,255,255,0.4)] hover:text-white transition-colors"
-          >
-            Volver al inicio
-          </button>
-        </div>
+      <div className="min-h-screen bg-[#0A0A0A] flex flex-col items-center justify-center gap-4">
+        <div className="w-12 h-12 border-[3px] border-[#F5C518] border-t-transparent rounded-full animate-spin" />
+        <p className="text-[#F5C518] text-base font-medium">Claude está analizando tu negocio...</p>
       </div>
     );
   }
