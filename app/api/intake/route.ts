@@ -27,6 +27,25 @@ export async function POST(request: NextRequest) {
       differentiator,
       willingness_to_pay,
       additional_info,
+      // New v2 fields — stored in agent_outputs until migration 003 is applied
+      revenue_model,
+      avg_ticket,
+      active_clients,
+      app_user_type,
+      user_profile,
+      concurrent_users,
+      process_to_automate,
+      app_name_idea,
+      required_features,
+      needs_auth,
+      user_roles,
+      integrations,
+      handles_payments,
+      needs_dashboard,
+      needs_mobile,
+      goal_90_days,
+      budget_range,
+      has_tech_team,
     } = body;
 
     if (!business_name || !main_problem) {
@@ -37,6 +56,28 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createServerClient();
+
+    // v2 fields stored in agent_outputs.intake until migration 003 adds the columns
+    const intakeV2 = {
+      revenue_model: revenue_model || "",
+      avg_ticket: avg_ticket || "",
+      active_clients: active_clients || "",
+      app_user_type: app_user_type || "",
+      user_profile: user_profile || "",
+      concurrent_users: concurrent_users || "",
+      process_to_automate: process_to_automate || "",
+      app_name_idea: app_name_idea || "",
+      required_features: required_features || "",
+      needs_auth: needs_auth || "",
+      user_roles: user_roles || "",
+      integrations: integrations || "",
+      handles_payments: handles_payments || "",
+      needs_dashboard: needs_dashboard || "",
+      needs_mobile: needs_mobile || "",
+      goal_90_days: goal_90_days || "",
+      budget_range: budget_range || "",
+      has_tech_team: has_tech_team || "",
+    };
 
     const { data, error } = await supabase
       .from("clients")
@@ -57,13 +98,13 @@ export async function POST(request: NextRequest) {
         has_team: has_team || "",
         daily_metrics: daily_metrics || "",
         current_software: current_software || "",
-        six_month_goal: six_month_goal || "",
+        six_month_goal: six_month_goal || goal_90_days || "",
         competitors: competitors || "",
         differentiator: differentiator || "",
-        willingness_to_pay: willingness_to_pay || "",
+        willingness_to_pay: willingness_to_pay || budget_range || "",
         additional_info: additional_info || "",
         status: "pending",
-        agent_outputs: {},
+        agent_outputs: { intake: intakeV2 },
       })
       .select("id")
       .single();

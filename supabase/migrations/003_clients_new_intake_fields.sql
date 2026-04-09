@@ -1,0 +1,20 @@
+-- Nuevos campos del intake form v2 (5-section deep form)
+ALTER TABLE public.clients
+  ADD COLUMN IF NOT EXISTS revenue_model        TEXT DEFAULT '',
+  ADD COLUMN IF NOT EXISTS avg_ticket           TEXT DEFAULT '',
+  ADD COLUMN IF NOT EXISTS active_clients       TEXT DEFAULT '',
+  ADD COLUMN IF NOT EXISTS app_user_type        TEXT DEFAULT '',
+  ADD COLUMN IF NOT EXISTS user_profile         TEXT DEFAULT '',
+  ADD COLUMN IF NOT EXISTS concurrent_users     TEXT DEFAULT '',
+  ADD COLUMN IF NOT EXISTS process_to_automate  TEXT DEFAULT '',
+  ADD COLUMN IF NOT EXISTS app_name_idea        TEXT DEFAULT '',
+  ADD COLUMN IF NOT EXISTS required_features    TEXT DEFAULT '',
+  ADD COLUMN IF NOT EXISTS needs_auth           TEXT DEFAULT '',
+  ADD COLUMN IF NOT EXISTS user_roles           TEXT DEFAULT '',
+  ADD COLUMN IF NOT EXISTS integrations         TEXT DEFAULT '',
+  ADD COLUMN IF NOT EXISTS handles_payments     TEXT DEFAULT '',
+  ADD COLUMN IF NOT EXISTS needs_dashboard      TEXT DEFAULT '',
+  ADD COLUMN IF NOT EXISTS needs_mobile         TEXT DEFAULT '',
+  ADD COLUMN IF NOT EXISTS goal_90_days         TEXT DEFAULT '',
+  ADD COLUMN IF NOT EXISTS budget_range         TEXT DEFAULT '',
+  ADD COLUMN IF NOT EXISTS has_tech_team        TEXT DEFAULT '';

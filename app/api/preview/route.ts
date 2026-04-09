@@ -25,6 +25,10 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: "Client not found" }, { status: 404 });
     }
 
+    // v2 fields may be in direct columns (after migration 003) or in agent_outputs.intake (before)
+    const v2 = (client.agent_outputs as Record<string, Record<string, string>>)?.intake ?? {};
+    const f = (key: string) => (client[key as keyof typeof client] as string) || v2[key] || "No especificado";
+
     const briefText = `
 NEGOCIO: ${client.business_name}
 SECTOR: ${client.sector || "No especificado"}
@@ -32,9 +36,9 @@ AÑOS OPERANDO: ${client.years_operating || "No especificado"}
 EQUIPO: ${client.team_size || "No especificado"}
 PRODUCTO PRINCIPAL: ${client.main_product || "No especificado"}
 DESCRIPCIÓN: ${client.business_description || "No especificado"}
-MODELO DE INGRESOS: ${client.revenue_model || "No especificado"}
-TICKET PROMEDIO: ${client.avg_ticket || "No especificado"}
-CLIENTES ACTIVOS: ${client.active_clients || "No especificado"}
+MODELO DE INGRESOS: ${f("revenue_model")}
+TICKET PROMEDIO: ${f("avg_ticket")}
+CLIENTES ACTIVOS: ${f("active_clients")}
 
 PROBLEMA PRINCIPAL: ${client.main_problem}
 DURACIÓN DEL PROBLEMA: ${client.problem_duration || "No especificado"}
@@ -42,12 +46,12 @@ SOLUCIONES INTENTADAS: ${client.tried_solutions || "No especificado"}
 COSTO MENSUAL DEL PROBLEMA: ${client.monthly_cost || "No especificado"}
 IMPACTO SI SE RESUELVE: ${client.impact_if_solved || "No especificado"}
 
-USUARIO PRINCIPAL DE LA APP: ${client.app_user_type || "No especificado"}
-PERFIL DEL USUARIO: ${client.user_profile || "No especificado"}
-USUARIOS SIMULTÁNEOS ESTIMADOS: ${client.concurrent_users || "No especificado"}
-PROCESO A AUTOMATIZAR: ${client.process_to_automate || "No especificado"}
+USUARIO PRINCIPAL DE LA APP: ${f("app_user_type")}
+PERFIL DEL USUARIO: ${f("user_profile")}
+USUARIOS SIMULTÁNEOS ESTIMADOS: ${f("concurrent_users")}
+PROCESO A AUTOMATIZAR: ${f("process_to_automate")}
 
-NOMBRE DE APP DESEADO: ${client.app_name_idea || "Por definir"}
+NOMBRE DE APP DESEADO: ${f("app_name_idea")}
 FUNCIONES REQUERIDAS: ${client.required_features || "No especificado"}
 NECESITA LOGIN: ${client.needs_auth || "No especificado"}
 ROLES DE USUARIO: ${client.user_roles || "No especificado"}
@@ -135,7 +139,7 @@ Responde ÚNICAMENTE con un objeto JSON válido, sin markdown, sin bloques de c�
     return Response.json({ success: true, preview }, { status: 200 });
 
   } catch (error) {
-    console.error("Preview generation error:", error);
-    return Response.json({ error: "Failed to generate preview" }, { status: 500 });
+    console.error("Preview error details:", JSON.stringify(error, Object.getOwnPropertyNames(error)));
+    return Response.json({ error: "Failed to generate preview", details: String(error) }, { status: 500 });
   }
 }

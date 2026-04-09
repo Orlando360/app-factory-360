@@ -1,7 +1,7 @@
 {
   "functions": {
-    "app/api/inngest/route.ts": {
-      "maxDuration": 60
-    }
+    "app/api/inngest/route.ts": { "maxDuration": 60 },
+    "app/api/preview/route.ts": { "maxDuration": 60 },
+    "app/api/pipeline/route.ts": { "maxDuration": 60 }
   }
 }
