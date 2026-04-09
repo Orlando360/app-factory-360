@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
 
     await inngest.send({
       name: "app-factory/pipeline.start",
-      data: { jobId, clientBrief: client, clientId },
+      data: { jobId, client_brief: client, clientId },
     });
 
     return Response.json({ started: true, clientId, jobId }, { status: 202 });
