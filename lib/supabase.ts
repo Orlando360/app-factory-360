@@ -67,4 +67,5 @@ export type ClientData = {
   github_url: string | null;
   vercel_url: string | null;
   error_message: string | null;
+  current_pipeline_job_id: string | null;
 };
