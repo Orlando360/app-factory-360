@@ -1,244 +1,202 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import { createBrowserClient } from "@/lib/supabase";
 
-type AgentInfo = {
-  key: string;
-  name: string;
-  description: string;
+const AGENT_NAMES: Record<string, { name: string; description: string }> = {
+  "01-diagnosticador": { name: "Diagnóstico", description: "Analizando tu negocio con metodología McKinsey + JTBD" },
+  "02-arquitecto": { name: "Arquitectura", description: "Diseñando la arquitectura de producto" },
+  "03-builder": { name: "Builder", description: "Construyendo el código backend" },
+  "04-ui-ux": { name: "UI/UX", description: "Creando el sistema de diseño Quiet Luxury" },
+  "05-qa": { name: "QA", description: "Revisando y corrigiendo el código" },
+  "06-deployment": { name: "Deploy", description: "Configurando deployment en Vercel + Supabase" },
+  "07-monetizacion": { name: "Monetización", description: "Definiendo estrategia de precios y ROI" },
+  "08-growth": { name: "Growth", description: "Generando el reporte ejecutivo final" },
 };
 
-type ProgressData = {
-  type: string;
-  status?: string;
-  progress?: number;
-  completed_agents?: number;
-  current_agent?: AgentInfo | null;
-  agent_outputs?: Record<string, unknown>;
-  github_url?: string | null;
-  vercel_url?: string | null;
-  error?: string | null;
+const AGENT_ORDER = [
+  "01-diagnosticador",
+  "02-arquitecto",
+  "03-builder",
+  "04-ui-ux",
+  "05-qa",
+  "06-deployment",
+  "07-monetizacion",
+  "08-growth",
+];
+
+type PipelineJob = {
+  id: string;
+  status: string;
+  current_step: string | null;
+  agents_outputs: Record<string, string>;
+  final_report: string | null;
 };
 
 type AgentProgressProps = {
-  clientId: string;
-  initialStatus?: string;
-  initialOutputs?: Record<string, unknown>;
+  jobId: string;
 };
 
-const ALL_AGENTS = [
-  { key: "agent1", name: "Diagnóstico", description: "Metodología McKinsey + JTBD" },
-  { key: "agent2", name: "Arquitectura", description: "Product Architecture" },
-  { key: "agent3", name: "UI/UX", description: "Sistema de diseño" },
-  { key: "agent4", name: "Builder", description: "Full Stack Engineering" },
-  { key: "agent5", name: "QA", description: "Quality Assurance" },
-  { key: "agent6", name: "Deploy", description: "GitHub + Vercel" },
-  { key: "agent7", name: "Monetización", description: "Revenue Strategy LATAM" },
-  { key: "agent8", name: "Growth", description: "B2B User Activation" },
-];
-
-function AgentStateIcon({ state }: { state: "pending" | "active" | "complete" | "error" }) {
-  if (state === "complete") {
-    return (
-      <div className="w-8 h-8 rounded-full bg-[rgba(34,197,94,0.15)] border border-[rgba(34,197,94,0.4)] flex items-center justify-center flex-shrink-0">
-        <span className="text-[#4ade80] text-sm">✓</span>
-      </div>
-    );
-  }
-  if (state === "active") {
-    return (
-      <div className="w-8 h-8 rounded-full bg-[rgba(245,197,24,0.1)] border-2 border-[#F5C518] flex items-center justify-center flex-shrink-0">
-        <span className="w-3 h-3 rounded-full bg-[#F5C518] animate-pulse" />
-      </div>
-    );
-  }
-  if (state === "error") {
-    return (
-      <div className="w-8 h-8 rounded-full bg-[rgba(239,68,68,0.15)] border border-[rgba(239,68,68,0.4)] flex items-center justify-center flex-shrink-0">
-        <span className="text-red-400 text-sm">✕</span>
-      </div>
-    );
-  }
-  return (
-    <div className="w-8 h-8 rounded-full border border-[rgba(255,255,255,0.1)] flex items-center justify-center flex-shrink-0">
-      <span className="w-1.5 h-1.5 rounded-full bg-[rgba(255,255,255,0.2)]" />
-    </div>
-  );
-}
-
-function OutputPreview({ data }: { data: unknown }) {
-  const [expanded, setExpanded] = useState(false);
-  const preview = JSON.stringify(data, null, 2).slice(0, 200);
-  const full = JSON.stringify(data, null, 2);
-
-  return (
-    <div className="mt-2">
-      <pre className="text-xs text-[rgba(255,255,255,0.5)] bg-[rgba(255,255,255,0.03)] rounded-lg p-3 overflow-auto max-h-40 font-mono">
-        {expanded ? full : preview + (full.length > 200 ? "..." : "")}
-      </pre>
-      {full.length > 200 && (
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="mt-1 text-xs text-[rgba(245,197,24,0.6)] hover:text-[#F5C518] transition-colors"
-        >
-          {expanded ? "Ver menos ↑" : "Ver más ↓"}
-        </button>
-      )}
-    </div>
-  );
-}
-
-export default function AgentProgress({ clientId, initialStatus, initialOutputs }: AgentProgressProps) {
-  const [data, setData] = useState<ProgressData>({
-    type: "progress",
-    status: initialStatus || "pending",
-    progress: 0,
-    completed_agents: 0,
-    current_agent: null,
-    agent_outputs: initialOutputs || {},
-  });
-  const [connected, setConnected] = useState(false);
-  const [done, setDone] = useState(false);
-  const eventSourceRef = useRef<EventSource | null>(null);
+export default function AgentProgress({ jobId }: AgentProgressProps) {
+  const [job, setJob] = useState<PipelineJob | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (initialStatus === "live" || initialStatus === "error") {
-      setDone(true);
-      return;
-    }
+    const supabase = createBrowserClient();
 
-    const es = new EventSource(`/api/progress/${clientId}`);
-    eventSourceRef.current = es;
+    // Initial fetch
+    supabase
+      .from("pipeline_jobs")
+      .select("id, status, current_step, agents_outputs, final_report")
+      .eq("id", jobId)
+      .single()
+      .then(({ data }) => {
+        if (data) setJob(data as PipelineJob);
+        setLoading(false);
+      });
 
-    es.onopen = () => setConnected(true);
-
-    es.onmessage = (event) => {
-      try {
-        const parsed: ProgressData = JSON.parse(event.data);
-        if (parsed.type === "progress") {
-          setData(parsed);
-        } else if (parsed.type === "done") {
-          setDone(true);
-          es.close();
-        } else if (parsed.type === "error") {
-          setDone(true);
-          es.close();
+    // Realtime subscription — push updates instead of polling
+    const channel = supabase
+      .channel(`pipeline-job-${jobId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "pipeline_jobs",
+          filter: `id=eq.${jobId}`,
+        },
+        (payload) => {
+          setJob(payload.new as PipelineJob);
         }
-      } catch {
-        // ignore parse errors
-      }
-    };
-
-    es.onerror = () => {
-      setConnected(false);
-    };
+      )
+      .subscribe();
 
     return () => {
-      es.close();
+      supabase.removeChannel(channel);
     };
-  }, [clientId, initialStatus]);
+  }, [jobId]);
 
-  const completedAgents = data.completed_agents || 0;
-  const progress = data.progress || 0;
-  const agentOutputs = data.agent_outputs || {};
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 text-[rgba(255,255,255,0.4)] text-sm py-4">
+        <span className="w-4 h-4 border-2 border-[rgba(245,197,24,0.4)] border-t-[#F5C518] rounded-full animate-spin" />
+        Conectando al pipeline...
+      </div>
+    );
+  }
+
+  if (!job) {
+    return (
+      <div className="text-[rgba(255,255,255,0.4)] text-sm py-4">
+        No se encontró el job de pipeline.
+      </div>
+    );
+  }
+
+  const completedAgents = AGENT_ORDER.filter((id) => !!job.agents_outputs?.[id]);
+  const progress = Math.round((completedAgents.length / 8) * 100);
+  const isCompleted = job.status === "completed";
+  const isError = job.status === "error";
 
   return (
     <div className="space-y-6">
-      {/* Overall progress */}
-      <div className="p-6 rounded-xl border border-[rgba(245,197,24,0.2)] bg-[rgba(255,255,255,0.02)]">
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <div className="font-bold text-lg">
-              {data.status === "live" ? "App generada y desplegada" :
-               data.status === "error" ? "Error en la generación" :
-               data.current_agent ? `Ejecutando: ${data.current_agent.name}` :
-               "En cola..."}
-            </div>
-            {data.current_agent && data.status !== "live" && (
-              <div className="text-sm text-[rgba(255,255,255,0.5)] mt-0.5">
-                {data.current_agent.description}
-              </div>
-            )}
-          </div>
-          <div className="text-right">
-            <div className="text-3xl font-black text-[#F5C518]">{progress}%</div>
-            <div className="text-xs text-[rgba(255,255,255,0.4)]">
-              {completedAgents}/8 agentes
-            </div>
-          </div>
+      {/* Progress bar */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm font-semibold text-white">
+            {isCompleted
+              ? "Pipeline completado"
+              : isError
+              ? "Error en el pipeline"
+              : progress === 0
+              ? "Iniciando pipeline..."
+              : `Progreso: ${progress}%`}
+          </span>
+          <span className="text-xs text-[rgba(255,255,255,0.4)]">
+            {completedAgents.length}/8 agentes
+          </span>
         </div>
-
-        {/* Progress bar */}
-        <div className="w-full h-2 bg-[rgba(255,255,255,0.06)] rounded-full overflow-hidden">
+        <div className="w-full bg-[rgba(255,255,255,0.08)] rounded-full h-2">
           <div
-            className="h-full bg-[#F5C518] rounded-full transition-all duration-1000 ease-out"
-            style={{ width: `${progress}%` }}
+            className="h-2 rounded-full transition-all duration-700"
+            style={{
+              width: `${progress}%`,
+              backgroundColor: isError ? "#ef4444" : "#F5C518",
+            }}
           />
         </div>
-
-        {/* Connection indicator */}
-        {!done && (
-          <div className="flex items-center gap-1.5 mt-3">
-            <span className={`w-1.5 h-1.5 rounded-full ${connected ? "bg-[#4ade80] animate-pulse" : "bg-[rgba(255,255,255,0.2)]"}`} />
-            <span className="text-xs text-[rgba(255,255,255,0.35)]">
-              {connected ? "Recibiendo actualizaciones en tiempo real" : "Conectando..."}
-            </span>
-          </div>
-        )}
       </div>
 
-      {/* Error message */}
-      {data.error && (
-        <div className="p-4 rounded-xl bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)] text-red-400 text-sm">
-          <strong>Error:</strong> {data.error}
-        </div>
-      )}
-
-      {/* Agent list */}
-      <div className="space-y-3">
-        {ALL_AGENTS.map((agent, index) => {
-          const isComplete = index < completedAgents;
-          const isActive = data.current_agent?.key === agent.key && !isComplete;
-          const isError = data.status === "error" && index === completedAgents && !isComplete;
-          const state = isError ? "error" : isComplete ? "complete" : isActive ? "active" : "pending";
-          const output = agentOutputs[agent.key];
+      {/* Agent cards */}
+      <div className="space-y-2">
+        {AGENT_ORDER.map((agentId) => {
+          const agent = AGENT_NAMES[agentId];
+          const isDone = !!job.agents_outputs?.[agentId];
+          const isRunning = !isDone && job.current_step?.includes(agentId);
 
           return (
             <div
-              key={agent.key}
-              className={`p-4 rounded-xl border transition-all duration-300 ${
-                isActive
-                  ? "border-[rgba(245,197,24,0.4)] bg-[rgba(245,197,24,0.04)]"
-                  : isComplete
-                  ? "border-[rgba(34,197,94,0.2)] bg-[rgba(34,197,94,0.02)]"
-                  : "border-[rgba(255,255,255,0.06)] bg-transparent"
+              key={agentId}
+              className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
+                isDone
+                  ? "border-[rgba(245,197,24,0.2)] bg-[rgba(245,197,24,0.05)]"
+                  : isRunning
+                  ? "border-[rgba(245,197,24,0.4)] bg-[rgba(245,197,24,0.08)]"
+                  : "border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.02)]"
               }`}
             >
-              <div className="flex items-center gap-3">
-                <AgentStateIcon state={state} />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-[rgba(245,197,24,0.5)] font-bold">
-                      {String(index + 1).padStart(2, "0")}
-                    </span>
-                    <span className={`font-semibold text-sm ${isComplete ? "text-white" : isActive ? "text-[#F5C518]" : "text-[rgba(255,255,255,0.4)]"}`}>
-                      {agent.name}
-                    </span>
-                    {isActive && (
-                      <span className="text-xs text-[rgba(245,197,24,0.6)] animate-pulse">ejecutando...</span>
-                    )}
-                  </div>
-                  <div className="text-xs text-[rgba(255,255,255,0.35)] mt-0.5">{agent.description}</div>
+              {/* Status icon */}
+              <div className="w-7 h-7 flex items-center justify-center flex-shrink-0">
+                {isDone ? (
+                  <span className="text-[#F5C518] text-base leading-none">✓</span>
+                ) : isRunning ? (
+                  <span className="w-4 h-4 border-2 border-[rgba(245,197,24,0.4)] border-t-[#F5C518] rounded-full animate-spin block" />
+                ) : (
+                  <span className="w-3 h-3 rounded-full bg-[rgba(255,255,255,0.1)] block" />
+                )}
+              </div>
+
+              {/* Agent info */}
+              <div className="flex-1 min-w-0">
+                <div
+                  className={`text-sm font-semibold ${
+                    isDone || isRunning ? "text-white" : "text-[rgba(255,255,255,0.4)]"
+                  }`}
+                >
+                  {agent.name}
+                </div>
+                <div className="text-xs text-[rgba(255,255,255,0.3)] truncate">
+                  {agent.description}
                 </div>
               </div>
 
-              {isComplete && output != null && (
-                <OutputPreview data={output} />
+              {isDone && (
+                <span className="text-xs text-[rgba(245,197,24,0.6)] font-medium flex-shrink-0">
+                  Completado
+                </span>
+              )}
+              {isRunning && (
+                <span className="text-xs text-[#F5C518] font-medium flex-shrink-0 animate-pulse">
+                  Procesando...
+                </span>
               )}
             </div>
           );
         })}
       </div>
+
+      {/* Final report */}
+      {isCompleted && job.final_report && (
+        <div className="mt-4 p-5 rounded-2xl border border-[rgba(245,197,24,0.2)] bg-[rgba(245,197,24,0.04)]">
+          <h3 className="text-sm font-bold text-[#F5C518] mb-3 uppercase tracking-wider">
+            Reporte Ejecutivo Final
+          </h3>
+          <div className="text-[rgba(255,255,255,0.8)] text-sm leading-relaxed whitespace-pre-wrap">
+            {job.final_report}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

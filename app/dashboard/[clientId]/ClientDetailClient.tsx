@@ -53,25 +53,32 @@ type ClientDetailClientProps = {
 
 export default function ClientDetailClient({ client }: ClientDetailClientProps) {
   const [generating, setGenerating] = useState(false);
-  const [started, setStarted] = useState(false);
+  const [jobId, setJobId] = useState<string | null>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem(`pipeline_job_${client.id}`);
+    }
+    return null;
+  });
   const [activeTab, setActiveTab] = useState<"progress" | "answers">("progress");
 
   const agentOutputs = (client.agent_outputs as Record<string, unknown>) || {};
-  const currentStatus = started ? "generating" : client.status;
+  const currentStatus = jobId ? "generating" : client.status;
 
   const handleGenerate = async () => {
     setGenerating(true);
     try {
-      const response = await fetch("/api/generate", {
+      const response = await fetch("/api/pipeline", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ clientId: client.id }),
       });
       if (response.ok) {
-        setStarted(true);
+        const { jobId: newJobId } = await response.json();
+        setJobId(newJobId);
+        localStorage.setItem(`pipeline_job_${client.id}`, newJobId);
       }
     } catch (err) {
-      console.error("Failed to start generation:", err);
+      console.error("Failed to start pipeline:", err);
     } finally {
       setGenerating(false);
     }
@@ -99,7 +106,7 @@ export default function ClientDetailClient({ client }: ClientDetailClientProps) 
               <span className={`px-3 py-1.5 rounded-full text-xs font-semibold ${STATUS_BADGE[currentStatus] || "badge-pending"}`}>
                 {STATUS_LABEL[currentStatus] || currentStatus}
               </span>
-              {(client.status === "pending" && !started) && (
+              {(client.status === "pending" && !jobId) && (
                 <button
                   onClick={handleGenerate}
                   disabled={generating}
@@ -163,11 +170,13 @@ export default function ClientDetailClient({ client }: ClientDetailClientProps) 
 
         {/* Tab content */}
         {activeTab === "progress" ? (
-          <AgentProgress
-            clientId={client.id}
-            initialStatus={started ? "generating" : client.status}
-            initialOutputs={agentOutputs}
-          />
+          jobId ? (
+            <AgentProgress jobId={jobId} />
+          ) : (
+            <div className="text-[rgba(255,255,255,0.4)] text-sm py-6 text-center">
+              Presiona <strong className="text-white">⚡ Generar App</strong> para iniciar el pipeline de 8 agentes.
+            </div>
+          )
         ) : (
           <div className="grid gap-3">
             {ANSWERS.map(({ key, label }, index) => {
