@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import AgentProgress from "@/components/AgentProgress";
+import { PipelineProgress } from "@/components/PipelineProgress";
 import AppPreview from "@/components/AppPreview";
 import type { ClientData } from "@/lib/supabase";
 
@@ -53,11 +53,11 @@ type ClientDetailClientProps = {
 
 export default function ClientDetailClient({ client }: ClientDetailClientProps) {
   const [generating, setGenerating] = useState(false);
-  const [started, setStarted] = useState(false);
+  const [jobId, setJobId] = useState<string | null>(client.current_pipeline_job_id);
   const [activeTab, setActiveTab] = useState<"progress" | "answers">("progress");
 
   const agentOutputs = (client.agent_outputs as Record<string, unknown>) || {};
-  const currentStatus = started ? "generating" : client.status;
+  const currentStatus = jobId && jobId !== client.current_pipeline_job_id ? "generating" : client.status;
 
   const handleGenerate = async () => {
     setGenerating(true);
@@ -68,7 +68,8 @@ export default function ClientDetailClient({ client }: ClientDetailClientProps) 
         body: JSON.stringify({ clientId: client.id }),
       });
       if (response.ok) {
-        setStarted(true);
+        const json = (await response.json()) as { jobId?: string };
+        if (json.jobId) setJobId(json.jobId);
       }
     } catch (err) {
       console.error("Failed to start generation:", err);
@@ -99,7 +100,7 @@ export default function ClientDetailClient({ client }: ClientDetailClientProps) 
               <span className={`px-3 py-1.5 rounded-full text-xs font-semibold ${STATUS_BADGE[currentStatus] || "badge-pending"}`}>
                 {STATUS_LABEL[currentStatus] || currentStatus}
               </span>
-              {(client.status === "pending" && !started) && (
+              {client.status === "pending" && !jobId && (
                 <button
                   onClick={handleGenerate}
                   disabled={generating}
@@ -163,11 +164,13 @@ export default function ClientDetailClient({ client }: ClientDetailClientProps) 
 
         {/* Tab content */}
         {activeTab === "progress" ? (
-          <AgentProgress
-            clientId={client.id}
-            initialStatus={started ? "generating" : client.status}
-            initialOutputs={agentOutputs}
-          />
+          jobId ? (
+            <PipelineProgress jobId={jobId} />
+          ) : (
+            <div className="rounded-2xl border border-[rgba(245,197,24,0.2)] bg-[rgba(255,255,255,0.02)] p-6 text-sm text-[rgba(255,255,255,0.6)]">
+              Todavía no has lanzado el pipeline para este cliente. Haz clic en <strong>Generar App</strong> arriba para iniciarlo.
+            </div>
+          )
         ) : (
           <div className="grid gap-3">
             {ANSWERS.map(({ key, label }, index) => {
