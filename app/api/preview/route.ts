@@ -116,11 +116,24 @@ Responde ÚNICAMENTE con un objeto JSON válido, sin markdown, sin bloques de c�
     try {
       preview = JSON.parse(rawText);
     } catch {
-      const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        preview = JSON.parse(jsonMatch[0]);
-      } else {
-        throw new Error("Could not parse AI response as JSON");
+      // Strip markdown code fences if present
+      let cleaned = rawText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+      // Extract outermost JSON object
+      const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        console.error("Preview: no JSON object found in response. Raw:", rawText.slice(0, 500));
+        throw new Error("Could not find JSON object in AI response");
+      }
+      cleaned = jsonMatch[0];
+      // Fix common LLM JSON issues: trailing commas before ] or }
+      cleaned = cleaned.replace(/,\s*([\]}])/g, "$1");
+      // Fix unescaped newlines inside string values
+      cleaned = cleaned.replace(/(?<=:\s*"[^"]*)\n(?=[^"]*")/g, "\\n");
+      try {
+        preview = JSON.parse(cleaned);
+      } catch (parseErr) {
+        console.error("Preview: JSON parse failed after cleanup. Error:", parseErr, "Cleaned:", cleaned.slice(0, 1000));
+        throw new Error(`Could not parse AI response as JSON: ${parseErr}`);
       }
     }
 
