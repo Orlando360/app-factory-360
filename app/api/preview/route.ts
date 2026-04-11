@@ -82,79 +82,47 @@ DIFERENCIADOR: ${client.differentiator || "No especificado"}
 INFO ADICIONAL: ${client.additional_info || "No especificado"}
     `.trim();
 
-    // Use prefill technique: start assistant response with "{" to force pure JSON
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 3000,
+      system: "You are a JSON API. You ONLY output valid JSON objects. No markdown, no code fences, no explanations. Every string value must be under 120 characters. Never use unescaped quotes inside string values.",
       messages: [
         {
           role: "user",
-          content: `Eres un arquitecto de software senior. Analiza este brief y genera una propuesta JSON.
+          content: `Analiza este brief de cliente y genera una propuesta de app como JSON.
 
 BRIEF:
 ${briefText}
 
-Responde SOLO con JSON valido. Sin markdown, sin code fences, sin texto extra.
-IMPORTANTE: Cada valor string debe ser corto (max 150 chars). No uses comillas dobles dentro de strings.
-Estructura exacta:
-{
-  "app_name": "string",
-  "tagline": "max 10 palabras",
-  "problem_statement": "2 oraciones max",
-  "solution_summary": "3 oraciones max",
-  "roi_projection": "2 oraciones con numeros",
-  "tech_stack": {
-    "frontend": "tech + razon breve",
-    "backend": "tech + razon breve",
-    "database": "tech + razon breve",
-    "auth": "solucion recomendada",
-    "integrations": ["integracion1", "integracion2"]
-  },
-  "modules": [
-    {"name": "modulo", "description": "que hace", "priority": "core|important|nice-to-have"}
-  ],
-  "user_flows": [
-    {"actor": "usuario", "flow": "flujo en una oracion"}
-  ],
-  "complexity": "simple|medium|complex",
-  "estimated_weeks": 6,
-  "risks": ["riesgo1", "riesgo2"],
-  "competitive_advantage": "2 oraciones max"
-}`
-        },
-        {
-          role: "assistant",
-          content: "{"
+Responde UNICAMENTE con un JSON valido con esta estructura:
+{"app_name":"string","tagline":"max 10 palabras","problem_statement":"2 oraciones","solution_summary":"3 oraciones","roi_projection":"2 oraciones con numeros","tech_stack":{"frontend":"string","backend":"string","database":"string","auth":"string","integrations":["string"]},"modules":[{"name":"string","description":"string","priority":"core|important|nice-to-have"}],"user_flows":[{"actor":"string","flow":"string"}],"complexity":"simple|medium|complex","estimated_weeks":6,"risks":["string"],"competitive_advantage":"2 oraciones"}`
         }
       ]
     });
 
-    const rawText = "{" + (message.content[0].type === "text" ? message.content[0].text : "");
+    const rawText = message.content[0].type === "text" ? message.content[0].text : "";
 
-    const preview = parseJsonSafe(rawText);
-    if (!preview) {
-      // Fallback: ask Claude to fix the broken JSON
-      console.error("Preview: first parse failed, attempting repair. Raw length:", rawText.length);
+    let previewData = parseJsonSafe(rawText);
+    if (!previewData) {
+      // Fallback: ask Claude to repair the broken JSON
+      console.error("Preview: first parse failed, attempting repair. Raw (first 500):", rawText.slice(0, 500));
       const repairMsg = await anthropic.messages.create({
         model: "claude-sonnet-4-6",
         max_tokens: 3000,
+        system: "You fix broken JSON. Output ONLY the corrected valid JSON object. Nothing else.",
         messages: [
           {
             role: "user",
-            content: `Fix this broken JSON. Return ONLY valid JSON, nothing else:\n${rawText.slice(0, 6000)}`
-          },
-          { role: "assistant", content: "{" }
+            content: `Fix this JSON:\n${rawText.slice(0, 6000)}`
+          }
         ]
       });
-      const repairedText = "{" + (repairMsg.content[0].type === "text" ? repairMsg.content[0].text : "");
-      const repaired = parseJsonSafe(repairedText);
-      if (!repaired) {
-        console.error("Preview: repair also failed. Repaired:", repairedText.slice(0, 1000));
+      const repairedText = repairMsg.content[0].type === "text" ? repairMsg.content[0].text : "";
+      previewData = parseJsonSafe(repairedText);
+      if (!previewData) {
+        console.error("Preview: repair also failed. Repaired (first 500):", repairedText.slice(0, 500));
         throw new Error("Could not parse AI response as JSON even after repair attempt");
       }
-      var previewData = repaired;
-    } else {
-      var previewData = preview;
     }
 
     const { error: updateError } = await supabase
