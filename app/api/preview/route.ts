@@ -4,6 +4,20 @@ import Anthropic from "@anthropic-ai/sdk";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+function parseJsonSafe(text: string): Record<string, unknown> | null {
+  // Try direct parse first
+  try { return JSON.parse(text); } catch { /* continue */ }
+  // Strip markdown fences
+  let cleaned = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+  // Extract outermost JSON object
+  const match = cleaned.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+  cleaned = match[0];
+  // Fix trailing commas
+  cleaned = cleaned.replace(/,\s*([\]}])/g, "$1");
+  try { return JSON.parse(cleaned); } catch { return null; }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -68,79 +82,85 @@ DIFERENCIADOR: ${client.differentiator || "No especificado"}
 INFO ADICIONAL: ${client.additional_info || "No especificado"}
     `.trim();
 
+    // Use prefill technique: start assistant response with "{" to force pure JSON
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 2000,
+      max_tokens: 3000,
       messages: [
         {
           role: "user",
-          content: `Eres un arquitecto de software senior especializado en apps de negocio para PYMES latinoamericanas. Analiza este brief y genera una propuesta profesional estructurada.
+          content: `Eres un arquitecto de software senior. Analiza este brief y genera una propuesta JSON.
 
-BRIEF DEL CLIENTE:
+BRIEF:
 ${briefText}
 
-Responde ÚNICAMENTE con un objeto JSON válido, sin markdown, sin bloques de código, sin explicaciones. El JSON debe tener exactamente esta estructura:
+Responde SOLO con JSON valido. Sin markdown, sin code fences, sin texto extra.
+IMPORTANTE: Cada valor string debe ser corto (max 150 chars). No uses comillas dobles dentro de strings.
+Estructura exacta:
 {
-  "app_name": "nombre comercial atractivo para la app",
-  "tagline": "frase de valor en máximo 10 palabras",
-  "problem_statement": "el problema real en 2 oraciones directas",
-  "solution_summary": "qué hace la app y cómo resuelve el problema en 3 oraciones",
-  "roi_projection": "retorno estimado concreto con números en 2 oraciones",
+  "app_name": "string",
+  "tagline": "max 10 palabras",
+  "problem_statement": "2 oraciones max",
+  "solution_summary": "3 oraciones max",
+  "roi_projection": "2 oraciones con numeros",
   "tech_stack": {
-    "frontend": "tecnología frontend recomendada con justificación breve",
-    "backend": "tecnología backend recomendada con justificación breve",
-    "database": "base de datos recomendada con justificación breve",
-    "auth": "solución de autenticación recomendada",
-    "integrations": ["integración 1", "integración 2", "integración 3"]
+    "frontend": "tech + razon breve",
+    "backend": "tech + razon breve",
+    "database": "tech + razon breve",
+    "auth": "solucion recomendada",
+    "integrations": ["integracion1", "integracion2"]
   },
   "modules": [
-    { "name": "nombre del módulo", "description": "qué hace en una oración", "priority": "core" },
-    { "name": "nombre del módulo", "description": "qué hace en una oración", "priority": "important" },
-    { "name": "nombre del módulo", "description": "qué hace en una oración", "priority": "nice-to-have" }
+    {"name": "modulo", "description": "que hace", "priority": "core|important|nice-to-have"}
   ],
   "user_flows": [
-    { "actor": "tipo de usuario", "flow": "descripción del flujo principal en una oración" }
+    {"actor": "usuario", "flow": "flujo en una oracion"}
   ],
   "complexity": "simple|medium|complex",
   "estimated_weeks": 6,
-  "risks": ["riesgo técnico o de negocio 1", "riesgo 2", "riesgo 3"],
-  "competitive_advantage": "qué hace única esta app vs soluciones genéricas en 2 oraciones"
+  "risks": ["riesgo1", "riesgo2"],
+  "competitive_advantage": "2 oraciones max"
 }`
+        },
+        {
+          role: "assistant",
+          content: "{"
         }
       ]
     });
 
-    const rawText = message.content[0].type === "text" ? message.content[0].text : "";
+    const rawText = "{" + (message.content[0].type === "text" ? message.content[0].text : "");
 
-    let preview;
-    try {
-      preview = JSON.parse(rawText);
-    } catch {
-      // Strip markdown code fences if present
-      let cleaned = rawText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
-      // Extract outermost JSON object
-      const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        console.error("Preview: no JSON object found in response. Raw:", rawText.slice(0, 500));
-        throw new Error("Could not find JSON object in AI response");
+    const preview = parseJsonSafe(rawText);
+    if (!preview) {
+      // Fallback: ask Claude to fix the broken JSON
+      console.error("Preview: first parse failed, attempting repair. Raw length:", rawText.length);
+      const repairMsg = await anthropic.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 3000,
+        messages: [
+          {
+            role: "user",
+            content: `Fix this broken JSON. Return ONLY valid JSON, nothing else:\n${rawText.slice(0, 6000)}`
+          },
+          { role: "assistant", content: "{" }
+        ]
+      });
+      const repairedText = "{" + (repairMsg.content[0].type === "text" ? repairMsg.content[0].text : "");
+      const repaired = parseJsonSafe(repairedText);
+      if (!repaired) {
+        console.error("Preview: repair also failed. Repaired:", repairedText.slice(0, 1000));
+        throw new Error("Could not parse AI response as JSON even after repair attempt");
       }
-      cleaned = jsonMatch[0];
-      // Fix common LLM JSON issues: trailing commas before ] or }
-      cleaned = cleaned.replace(/,\s*([\]}])/g, "$1");
-      // Fix unescaped newlines inside string values
-      cleaned = cleaned.replace(/(?<=:\s*"[^"]*)\n(?=[^"]*")/g, "\\n");
-      try {
-        preview = JSON.parse(cleaned);
-      } catch (parseErr) {
-        console.error("Preview: JSON parse failed after cleanup. Error:", parseErr, "Cleaned:", cleaned.slice(0, 1000));
-        throw new Error(`Could not parse AI response as JSON: ${parseErr}`);
-      }
+      var previewData = repaired;
+    } else {
+      var previewData = preview;
     }
 
     const { error: updateError } = await supabase
       .from("clients")
       .update({
-        agent_outputs: { preview },
+        agent_outputs: { preview: previewData },
         status: "preview_ready"
       })
       .eq("id", clientId);
@@ -149,7 +169,7 @@ Responde ÚNICAMENTE con un objeto JSON válido, sin markdown, sin bloques de c�
       console.error("Failed to save preview:", updateError);
     }
 
-    return Response.json({ success: true, preview }, { status: 200 });
+    return Response.json({ success: true, preview: previewData }, { status: 200 });
 
   } catch (error) {
     console.error("Preview error details:", JSON.stringify(error, Object.getOwnPropertyNames(error as object)));
