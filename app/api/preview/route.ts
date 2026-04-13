@@ -1,8 +1,6 @@
 import { NextRequest } from "next/server";
 import { createServerClient } from "@/lib/supabase";
-import Anthropic from "@anthropic-ai/sdk";
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+import { callAnthropicWithRetry } from "@/lib/anthropic-retry";
 
 function parseJsonSafe(text: string): Record<string, unknown> | null {
   // Try direct parse first
@@ -82,42 +80,51 @@ DIFERENCIADOR: ${client.differentiator || "No especificado"}
 INFO ADICIONAL: ${client.additional_info || "No especificado"}
     `.trim();
 
-    const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 3000,
-      system: "You are a JSON API. You ONLY output valid JSON objects. No markdown, no code fences, no explanations. Every string value must be under 120 characters. Never use unescaped quotes inside string values.",
-      messages: [
-        {
-          role: "user",
-          content: `Analiza este brief de cliente y genera una propuesta de app como JSON.
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) throw new Error("ANTHROPIC_API_KEY no configurada");
+
+    const message = await callAnthropicWithRetry(
+      {
+        model: "claude-sonnet-4-6",
+        max_tokens: 3000,
+        system: "You are a JSON API. You ONLY output valid JSON objects. No markdown, no code fences, no explanations. Every string value must be under 120 characters. Never use unescaped quotes inside string values.",
+        messages: [
+          {
+            role: "user",
+            content: `Analiza este brief de cliente y genera una propuesta de app como JSON.
 
 BRIEF:
 ${briefText}
 
 Responde UNICAMENTE con un JSON valido con esta estructura:
-{"app_name":"string","tagline":"max 10 palabras","problem_statement":"2 oraciones","solution_summary":"3 oraciones","roi_projection":"2 oraciones con numeros","tech_stack":{"frontend":"string","backend":"string","database":"string","auth":"string","integrations":["string"]},"modules":[{"name":"string","description":"string","priority":"core|important|nice-to-have"}],"user_flows":[{"actor":"string","flow":"string"}],"complexity":"simple|medium|complex","estimated_weeks":6,"risks":["string"],"competitive_advantage":"2 oraciones"}`
-        }
-      ]
-    });
+{"app_name":"string","tagline":"max 10 palabras","problem_statement":"2 oraciones","solution_summary":"3 oraciones","roi_projection":"2 oraciones con numeros","tech_stack":{"frontend":"string","backend":"string","database":"string","auth":"string","integrations":["string"]},"modules":[{"name":"string","description":"string","priority":"core|important|nice-to-have"}],"user_flows":[{"actor":"string","flow":"string"}],"complexity":"simple|medium|complex","estimated_weeks":6,"risks":["string"],"competitive_advantage":"2 oraciones"}`,
+          },
+        ],
+      },
+      apiKey,
+    );
 
-    const rawText = message.content[0].type === "text" ? message.content[0].text : "";
+    const rawText = message.content.find(b => b.type === "text")?.text ?? "";
 
     let previewData = parseJsonSafe(rawText);
     if (!previewData) {
       // Fallback: ask Claude to repair the broken JSON
       console.error("Preview: first parse failed, attempting repair. Raw (first 500):", rawText.slice(0, 500));
-      const repairMsg = await anthropic.messages.create({
-        model: "claude-sonnet-4-6",
-        max_tokens: 3000,
-        system: "You fix broken JSON. Output ONLY the corrected valid JSON object. Nothing else.",
-        messages: [
-          {
-            role: "user",
-            content: `Fix this JSON:\n${rawText.slice(0, 6000)}`
-          }
-        ]
-      });
-      const repairedText = repairMsg.content[0].type === "text" ? repairMsg.content[0].text : "";
+      const repairMsg = await callAnthropicWithRetry(
+        {
+          model: "claude-sonnet-4-6",
+          max_tokens: 3000,
+          system: "You fix broken JSON. Output ONLY the corrected valid JSON object. Nothing else.",
+          messages: [
+            {
+              role: "user",
+              content: `Fix this JSON:\n${rawText.slice(0, 6000)}`,
+            },
+          ],
+        },
+        apiKey,
+      );
+      const repairedText = repairMsg.content.find(b => b.type === "text")?.text ?? "";
       previewData = parseJsonSafe(repairedText);
       if (!previewData) {
         console.error("Preview: repair also failed. Repaired (first 500):", repairedText.slice(0, 500));

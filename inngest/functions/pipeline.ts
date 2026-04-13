@@ -1,9 +1,7 @@
 import { inngest } from "@/inngest/client";
 import { AGENT_PROMPTS } from "@/inngest/agent-prompts";
-import Anthropic from "@anthropic-ai/sdk";
+import { callAnthropicWithRetry } from "@/lib/anthropic-retry";
 import { createClient } from "@supabase/supabase-js";
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 function getSupabase() {
   return createClient(
@@ -46,16 +44,21 @@ async function callAgent(
   agentId: keyof typeof AGENT_PROMPTS,
   userMessage: string
 ): Promise<string> {
-  const response = await anthropic.messages.create({
-    model: "claude-opus-4-6",
-    max_tokens: 16000,
-    thinking: { type: "adaptive" },
-    system: AGENT_PROMPTS[agentId],
-    messages: [{ role: "user", content: userMessage }],
-  });
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY no configurada");
 
-  const textBlock = response.content.find((b) => b.type === "text");
-  return textBlock?.text ?? "";
+  const response = await callAnthropicWithRetry(
+    {
+      model: "claude-opus-4-6",
+      max_tokens: 16000,
+      thinking: { type: "adaptive" },
+      system: AGENT_PROMPTS[agentId],
+      messages: [{ role: "user", content: userMessage }],
+    },
+    apiKey,
+  );
+
+  return response.content.find((b) => b.type === "text")?.text ?? "";
 }
 
 export const pipelineFunction = inngest.createFunction(
