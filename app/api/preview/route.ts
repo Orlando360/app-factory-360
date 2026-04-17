@@ -85,8 +85,8 @@ INFO ADICIONAL: ${client.additional_info || "No especificado"}
 
     const message = await callAnthropicWithRetry(
       {
-        model: "claude-sonnet-4-6",
-        max_tokens: 3000,
+        model: "claude-opus-4-7",
+        max_tokens: 4200,
         system: "You are a JSON API. You ONLY output valid JSON objects. No markdown, no code fences, no explanations. Every string value must be under 120 characters. Never use unescaped quotes inside string values.",
         messages: [
           {
@@ -112,8 +112,8 @@ Responde UNICAMENTE con un JSON valido con esta estructura:
       console.error("Preview: first parse failed, attempting repair. Raw (first 500):", rawText.slice(0, 500));
       const repairMsg = await callAnthropicWithRetry(
         {
-          model: "claude-sonnet-4-6",
-          max_tokens: 3000,
+          model: "claude-opus-4-7",
+          max_tokens: 4200,
           system: "You fix broken JSON. Output ONLY the corrected valid JSON object. Nothing else.",
           messages: [
             {
