@@ -40,6 +40,10 @@ async function appendAgentOutput(jobId: string, agentId: string, output: string)
   }
 }
 
+// Strategic agents (01, 02, 05, 06, 07, 08) → Opus 4.7 with max_tokens ×1.4
+// Builder/UI-UX agents (03, 04) → Sonnet 4.6 (cost-optimized)
+const BUILDER_AGENTS = new Set(["03-builder", "04-ui-ux"]);
+
 async function callAgent(
   agentId: keyof typeof AGENT_PROMPTS,
   userMessage: string
@@ -47,11 +51,13 @@ async function callAgent(
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY no configurada");
 
+  const isBuilder = BUILDER_AGENTS.has(agentId);
+
   const response = await callAnthropicWithRetry(
     {
-      model: "claude-opus-4-6",
-      max_tokens: 16000,
-      thinking: { type: "adaptive" },
+      model: isBuilder ? "claude-sonnet-4-6" : "claude-opus-4-7",
+      max_tokens: isBuilder ? 16000 : 22400,
+      ...(isBuilder ? {} : { thinking: { type: "adaptive" } }),
       system: AGENT_PROMPTS[agentId],
       messages: [{ role: "user", content: userMessage }],
     },
